@@ -40,15 +40,20 @@ export default function AuthPage() {
     setIsBusy(true);
     setMessage('');
     const supabase = createClient();
-    const redirectTo = `${window.location.origin}/auth/callback`;
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectTo
-      }
-    });
-    setMessage(error ? error.message : '確認メールを送信しました。メール内のリンクを開いて登録を完了してください。');
+    const { data, error } = await supabase.auth.signUp({ email, password });
+
+    if (error) {
+      setMessage(error.message);
+      setIsBusy(false);
+      return;
+    }
+
+    if (data.session) {
+      window.location.href = '/dashboard';
+      return;
+    }
+
+    setMessage('登録は作成されましたが、Supabase側でメール確認が有効です。Authentication > Sign In / Providers > Email の Confirm email をオフにしてください。');
     setIsBusy(false);
   }
 
