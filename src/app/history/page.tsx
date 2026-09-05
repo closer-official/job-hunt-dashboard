@@ -1,7 +1,11 @@
 import { DashboardShell } from '@/components/dashboard-shell';
-import { companies } from '@/lib/mock-data';
+import { getCompanyUpdates } from '@/lib/companies';
 
-export default function HistoryPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function HistoryPage() {
+  const updates = await getCompanyUpdates();
+
   return (
     <DashboardShell>
       <section className="section-head">
@@ -11,15 +15,17 @@ export default function HistoryPage() {
         </div>
       </section>
       <div className="timeline">
-        {companies.map((company) => (
-          <article key={company.id} className="timeline-item">
-            <time>{company.updatedAt}</time>
+        {updates.map((update) => (
+          <article key={update.id} className="timeline-item">
+            <time>{update.createdAt}</time>
             <div>
-              <strong>{company.name}</strong>
-              <p>初期評価データを登録しました。</p>
+              <strong>{update.companyName}</strong>
+              <p>{update.summary}</p>
+              {update.newScore ? <p className="muted">適合度: {update.newScore}/100</p> : null}
             </div>
           </article>
         ))}
+        {updates.length === 0 ? <p className="empty">更新履歴はまだありません。</p> : null}
       </div>
     </DashboardShell>
   );
