@@ -12,8 +12,9 @@ function textValue(value: unknown) {
   return typeof value === 'string' ? value : '';
 }
 
-export default async function CompanyDetailPage({ params }: { params: { id: string } }) {
-  const company = await getCompany(params.id);
+export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const company = await getCompany(decodeURIComponent(id));
   if (!company) notFound();
 
   const research = company.fullResearch;
