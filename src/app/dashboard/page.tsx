@@ -1,8 +1,11 @@
 import Link from 'next/link';
 import { DashboardShell } from '@/components/dashboard-shell';
-import { companies, statusLabels } from '@/lib/mock-data';
+import { getCompanies, statusLabels } from '@/lib/companies';
 
-export default function DashboardPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardPage() {
+  const companies = await getCompanies();
   const grouped = Object.entries(statusLabels).map(([status, label]) => ({
     status,
     label,
@@ -25,7 +28,7 @@ export default function DashboardPage() {
             <h2>{group.label}</h2>
             {group.companies.length === 0 ? <p className="empty">該当なし</p> : null}
             {group.companies.map((company) => (
-              <Link key={company.id} href={`/companies/${company.id}`} className="company-card">
+              <Link key={company.id} href={`/companies/${company.slug}`} className="company-card">
                 <div className="card-row">
                   <strong>{company.name}</strong>
                   <span className="score">{company.grade} / {company.score}</span>
