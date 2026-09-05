@@ -1,1 +1,30 @@
-{"scripts":{"dev":"next dev","build":"next build","start":"next start","lint":"next lint","typecheck":"tsc --noEmit"},"dependencies":{"@sparticuz/chromium":"latest","@supabase/ssr":"latest","@supabase/supabase-js":"latest","lucide-react":"latest","next":"latest","playwright-core":"latest","react":"latest","react-dom":"latest"},"devDependencies":{"@types/node":"latest","@types/react":"latest","@types/react-dom":"latest","autoprefixer":"latest","eslint":"latest","eslint-config-next":"latest","postcss":"latest","tailwindcss":"latest","typescript":"latest"},"private":true}
+{
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sparticuz/chromium": "149.0.0",
+    "@supabase/ssr": "0.12.6",
+    "@supabase/supabase-js": "2.115.0",
+    "lucide-react": "1.41.0",
+    "next": "16.3.4",
+    "playwright-core": "1.63.0",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "26.4.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "autoprefixer": "10.5.5",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.3.4",
+    "postcss": "8.5.28",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  }
+}
