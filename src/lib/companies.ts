@@ -112,12 +112,12 @@ export async function getCompanies() {
     .sort((a, b) => statusRank[a.status] - statusRank[b.status] || b.score - a.score);
 }
 
-export async function getCompany(slug: string) {
+export async function getCompany(slugOrId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('companies')
     .select('id,name,slug,score,grade,status,role_fit,headline,full_research,risks,highlights,updated_at')
-    .eq('slug', slug)
+    .or(`slug.eq.${slugOrId},id.eq.${slugOrId}`)
     .single();
 
   if (error) {
