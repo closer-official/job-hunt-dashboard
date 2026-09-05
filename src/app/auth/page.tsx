@@ -27,6 +27,16 @@ export default function AuthPage() {
   }
 
   async function signUp() {
+    if (!email) {
+      setMessage('メールアドレスを入力してください。');
+      return;
+    }
+
+    if (password.length < 8) {
+      setMessage('会員登録には8文字以上のパスワードを入力してください。');
+      return;
+    }
+
     setIsBusy(true);
     setMessage('');
     const supabase = createClient();
@@ -71,7 +81,7 @@ export default function AuthPage() {
         <button className="primary-action" type="submit" disabled={isBusy}>
           ログイン
         </button>
-        <button className="secondary-action" type="button" onClick={signUp} disabled={isBusy || !email || password.length < 8}>
+        <button className="secondary-action" type="button" onClick={signUp} disabled={isBusy}>
           会員登録
         </button>
         {message ? <p className="form-message">{message}</p> : null}
