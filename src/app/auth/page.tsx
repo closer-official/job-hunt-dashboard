@@ -9,6 +9,14 @@ export default function AuthPage() {
   const [message, setMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
+  function getAuthErrorMessage(errorMessage: string) {
+    if (errorMessage === 'Email signups are disabled') {
+      return 'Supabase側でメールの新規登録がOFFです。Authentication > Sign In / Providers > Email の Enable email signups をONにしてください。';
+    }
+
+    return errorMessage;
+  }
+
   async function signInWithPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsBusy(true);
@@ -43,7 +51,7 @@ export default function AuthPage() {
     const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
-      setMessage(error.message);
+      setMessage(getAuthErrorMessage(error.message));
       setIsBusy(false);
       return;
     }
