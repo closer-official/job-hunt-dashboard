@@ -4,23 +4,25 @@ import { FormEvent, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 
 export default function AuthPage() {
-  const supabase = createClient();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
 
   async function signInWithPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setMessage(error ? error.message : 'ログインしました。');
   }
 
   async function signUp() {
+    const supabase = createClient();
     const { error } = await supabase.auth.signUp({ email, password });
     setMessage(error ? error.message : '確認メールを送信しました。');
   }
 
   async function sendOtp() {
+    const supabase = createClient();
     const redirectTo = `${window.location.origin}/auth/callback`;
     const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: redirectTo } });
     setMessage(error ? error.message : 'ワンタイムログインメールを送信しました。');
