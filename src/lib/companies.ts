@@ -112,13 +112,18 @@ export async function getCompanies() {
     .sort((a, b) => statusRank[a.status] - statusRank[b.status] || b.score - a.score);
 }
 
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export async function getCompany(slugOrId: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  let query = supabase
     .from('companies')
-    .select('id,name,slug,score,grade,status,role_fit,headline,full_research,risks,highlights,updated_at')
-    .or(`slug.eq.${slugOrId},id.eq.${slugOrId}`)
-    .single();
+    .select('id,name,slug,score,grade,status,role_fit,headline,full_research,risks,highlights,updated_at');
+
+  query = isUuid(slugOrId) ? query.eq('id', slugOrId) : query.eq('slug', slugOrId);
+  const { data, error } = await query.single();
 
   if (error) {
     if (error.code === 'PGRST116') return null;
