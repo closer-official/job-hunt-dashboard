@@ -34,7 +34,7 @@ export async function GET() {
     const page = await browser.newPage();
     await page.setContent(renderResumeHtml(), { waitUntil: 'networkidle' });
     const pdf = await page.pdf({ format: 'A4', printBackground: true });
-    return new NextResponse(pdf, {
+    return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'content-type': 'application/pdf',
         'content-disposition': 'inline; filename="resume.pdf"'
