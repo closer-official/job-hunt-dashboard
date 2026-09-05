@@ -1,7 +1,11 @@
 import { DashboardShell } from '@/components/dashboard-shell';
-import { companies } from '@/lib/mock-data';
+import { getCompanies } from '@/lib/companies';
 
-export default function ComparePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function ComparePage() {
+  const companies = await getCompanies();
+
   return (
     <DashboardShell>
       <section className="section-head">
@@ -21,7 +25,7 @@ export default function ComparePage() {
                 <td>{company.name}</td>
                 <td>{company.grade} / {company.score}</td>
                 <td>{company.roleFit}</td>
-                <td>{company.risks.join(', ')}</td>
+                <td>{company.risks.slice(0, 2).join(' / ')}</td>
                 <td>{company.updatedAt}</td>
               </tr>
             ))}
