@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import chromium from '@sparticuz/chromium';
 import { chromium as playwright } from 'playwright-core';
+import { isOwnerEmail } from '@/lib/auth';
+import { createClient } from '@/lib/supabase/server';
 
 function renderResumeHtml() {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><style>
@@ -14,6 +16,12 @@ function renderResumeHtml() {
 export async function GET() {
   if (!process.env.DASHBOARD_OWNER_EMAIL) {
     return NextResponse.json({ error: 'Owner access is not configured.' }, { status: 503 });
+  }
+
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!isOwnerEmail(data.user?.email)) {
+    return NextResponse.json({ error: 'Not found.' }, { status: 404 });
   }
 
   const browser = await playwright.launch({
