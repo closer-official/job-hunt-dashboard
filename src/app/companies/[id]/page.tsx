@@ -1,9 +1,9 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { DashboardShell } from '@/components/dashboard-shell';
 import { isOwnerEmail } from '@/lib/auth';
 import { getCompany, statusLabels } from '@/lib/companies';
-import { motivationPipeline, pipelineStatus, researchFieldLabels } from '@/lib/motivation-pipeline';
+import { buildRewritePrompt, motivationPipeline, pipelineStatus, researchFieldLabels } from '@/lib/motivation-pipeline';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -14,6 +14,31 @@ function textList(value: unknown) {
 
 function textValue(value: unknown) {
   return typeof value === 'string' ? value : '';
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function rowsToText(value: unknown) {
+  if (!Array.isArray(value)) return '';
+  return value.map((item) => {
+    if (!item || typeof item !== 'object') return '';
+    const row = item as Record<string, unknown>;
+    return [textValue(row.year), textValue(row.month), textValue(row.text)].filter(Boolean).join(' ');
+  }).filter(Boolean).join('\n');
+}
+
+function textToRows(value: string) {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d{4})[\s/年-]*(\d{1,2})?[月\s]*(.*)$/);
+      if (!match) return { year: '', month: '', text: line };
+      return { year: match[1] ?? '', month: match[2] ?? '', text: (match[3] || line).trim() };
+    });
 }
 
 type ApplicationAnswer = {
@@ -35,8 +60,9 @@ function isBOrAbove(grade: string) {
 function applicationForm(value: unknown): ApplicationForm | null {
   if (!value || typeof value !== 'object') return null;
   const form = value as Record<string, unknown>;
-  const answers = Array.isArray(form.answers)
-    ? form.answers.filter((item): item is ApplicationAnswer => {
+  const rawAnswers = Array.isArray(form.answers) ? form.answers : Array.isArray(form.fields) ? form.fields : [];
+  const answers = rawAnswers
+    ? rawAnswers.filter((item): item is ApplicationAnswer => {
         if (!item || typeof item !== 'object') return false;
         const answer = item as Record<string, unknown>;
         return typeof answer.label === 'string' && typeof answer.answer === 'string';
@@ -71,6 +97,7 @@ async function approveMotivation(formData: FormData) {
 
   const nextResearch = {
     ...company.fullResearch,
+    resume_motivation: pipeline.draft.trim(),
     motivation_pipeline: {
       ...pipeline,
       review_status: 'approved',
@@ -97,6 +124,161 @@ async function approveMotivation(formData: FormData) {
   revalidatePath(`/companies/${slug}`);
 }
 
+async function rejectMotivation(formData: FormData) {
+  'use server';
+
+  const slug = String(formData.get('slug') ?? '');
+  if (!slug) return;
+
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!isOwnerEmail(data.user?.email)) return;
+
+  const company = await getCompany(slug);
+  if (!company) return;
+
+  const pipeline = motivationPipeline(company.fullResearch.motivation_pipeline);
+  const rewritePrompt = buildRewritePrompt(company.name, pipeline);
+  const nextResearch = {
+    ...company.fullResearch,
+    motivation_pipeline: {
+      ...pipeline,
+      review_status: 'rejected',
+      rejected_at: new Date().toISOString(),
+      rejected_by: data.user?.email ?? '',
+      rewrite_prompt: rewritePrompt
+    }
+  };
+
+  await supabase
+    .from('companies')
+    .update({ full_research: nextResearch, updated_at: new Date().toISOString() })
+    .eq('slug', slug);
+
+  await supabase
+    .from('company_updates')
+    .insert({
+      company_id: company.id,
+      summary: '志望動機ドラフトが不承認になり、Claudeリライト用プロンプトを作成しました。',
+      previous_score: company.score,
+      new_score: company.score,
+      source_note: '志望動機生成ゲート'
+    });
+
+  revalidatePath(`/companies/${slug}`);
+}
+
+async function applyRewrittenMotivation(formData: FormData) {
+  'use server';
+
+  const slug = String(formData.get('slug') ?? '');
+  const rewrittenMotivation = String(formData.get('rewrittenMotivation') ?? '').trim();
+  if (!slug || !rewrittenMotivation) return;
+
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!isOwnerEmail(data.user?.email)) return;
+
+  const company = await getCompany(slug);
+  if (!company) return;
+
+  const pipeline = motivationPipeline(company.fullResearch.motivation_pipeline);
+  const nextResearch = {
+    ...company.fullResearch,
+    resume_motivation: rewrittenMotivation,
+    motivation_pipeline: {
+      ...pipeline,
+      draft: rewrittenMotivation,
+      review_status: 'approved',
+      confirmed_at: new Date().toISOString(),
+      confirmed_by: data.user?.email ?? ''
+    }
+  };
+
+  await supabase
+    .from('companies')
+    .update({ full_research: nextResearch, updated_at: new Date().toISOString() })
+    .eq('slug', slug);
+
+  await supabase
+    .from('company_updates')
+    .insert({
+      company_id: company.id,
+      summary: 'リライト後の志望動機を会社別履歴書PDFに反映しました。',
+      previous_score: company.score,
+      new_score: company.score,
+      source_note: '履歴書PDF反映'
+    });
+
+  revalidatePath(`/companies/${slug}`);
+  redirect(`/api/companies/${slug}/resume/pdf`);
+}
+
+async function saveResumeOverrides(formData: FormData) {
+  'use server';
+
+  const slug = String(formData.get('slug') ?? '');
+  if (!slug) return;
+
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!isOwnerEmail(data.user?.email)) return;
+
+  const company = await getCompany(slug);
+  if (!company) return;
+
+  const currentOverrides = objectValue(company.fullResearch.resume_overrides);
+  const nextOverrides: Record<string, unknown> = { ...currentOverrides };
+  const textFields = [
+    'name',
+    'nameKana',
+    'birthDate',
+    'gender',
+    'postalCode',
+    'address',
+    'addressKana',
+    'phone',
+    'email',
+    'commute',
+    'dependents',
+    'spouse',
+    'spouseSupport'
+  ];
+
+  textFields.forEach((field) => {
+    const value = String(formData.get(field) ?? '').trim();
+    if (value) nextOverrides[field] = value;
+  });
+
+  const historyText = String(formData.get('history') ?? '').trim();
+  if (historyText) nextOverrides.history = textToRows(historyText);
+
+  const licenseText = String(formData.get('licenses') ?? '').trim();
+  if (licenseText) nextOverrides.licenses = textToRows(licenseText);
+
+  const nextResearch = {
+    ...company.fullResearch,
+    resume_overrides: nextOverrides
+  };
+
+  await supabase
+    .from('companies')
+    .update({ full_research: nextResearch, updated_at: new Date().toISOString() })
+    .eq('slug', slug);
+
+  await supabase
+    .from('company_updates')
+    .insert({
+      company_id: company.id,
+      summary: '会社別履歴書の手動編集内容を保存しました。',
+      previous_score: company.score,
+      new_score: company.score,
+      source_note: '履歴書編集'
+    });
+
+  revalidatePath(`/companies/${slug}`);
+}
+
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const company = await getCompany(decodeURIComponent(id));
@@ -105,7 +287,22 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   const supabase = await createClient();
   const { data } = await supabase.auth.getUser();
   const canSeePersonal = isOwnerEmail(data.user?.email);
+  const { data: profileRow } = canSeePersonal && data.user?.id
+    ? await supabase
+        .from('resume_profiles')
+        .select('profile')
+        .eq('owner_user_id', data.user.id)
+        .maybeSingle()
+    : { data: null };
   const research = company.fullResearch;
+  const profile = objectValue(profileRow?.profile);
+  const overrides = objectValue(research.resume_overrides);
+  const resumeText = (key: string) => textValue(overrides[key]) || textValue(profile[key]);
+  const commute = objectValue(research.commute);
+  const googleMapsDestination = textValue(research.company_address) || textValue(research.office_address) || textValue(commute.destination);
+  const googleMapsUrl = resumeText('address') && googleMapsDestination
+    ? `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(resumeText('address'))}&destination=${encodeURIComponent(googleMapsDestination)}&travelmode=transit`
+    : '';
   const nextActions = textList(research.next_actions);
   const links = textList(research.links);
   const selection = textValue(research.selection);
@@ -218,12 +415,70 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
               </div>
             ) : null}
             {motivationStatus.canApprove ? (
-              <form action={approveMotivation}>
-                <input type="hidden" name="slug" value={company.slug} />
-                <button className="primary-action small-action" type="submit">この接続で確認済みにする</button>
-              </form>
+              <div className="action-row">
+                <form action={approveMotivation}>
+                  <input type="hidden" name="slug" value={company.slug} />
+                  <button className="primary-action small-action" type="submit">承認してPDFに反映</button>
+                </form>
+                <form action={rejectMotivation}>
+                  <input type="hidden" name="slug" value={company.slug} />
+                  <button className="secondary-action small-action" type="submit">不承認: Claude指示を作る</button>
+                </form>
+              </div>
             ) : null}
+            {motivation.rewrite_prompt ? (
+              <label className="field-block">
+                Claudeリライト指示プロンプト
+                <textarea readOnly rows={12} defaultValue={motivation.rewrite_prompt} />
+              </label>
+            ) : null}
+            <form className="stack-form" action={applyRewrittenMotivation}>
+              <input type="hidden" name="slug" value={company.slug} />
+              <label className="field-block">
+                リライト後の志望動機を貼り付け
+                <textarea name="rewrittenMotivation" rows={8} defaultValue={motivation.draft ?? ''} />
+              </label>
+              <button className="primary-action small-action" type="submit">貼り付け内容を反映してPDF出力</button>
+            </form>
           </div>
+
+          <details className="pipeline-box resume-edit-box">
+            <summary>履歴書項目を編集</summary>
+            <form className="resume-edit-form" action={saveResumeOverrides}>
+              <input type="hidden" name="slug" value={company.slug} />
+              <div className="form-grid">
+                <label>氏名<input name="name" defaultValue={resumeText('name')} /></label>
+                <label>ふりがな<input name="nameKana" defaultValue={resumeText('nameKana')} /></label>
+                <label>生年月日<input name="birthDate" defaultValue={resumeText('birthDate')} /></label>
+                <label>性別<input name="gender" defaultValue={resumeText('gender')} /></label>
+                <label>郵便番号<input name="postalCode" defaultValue={resumeText('postalCode')} /></label>
+                <label>電話番号<input name="phone" defaultValue={resumeText('phone')} /></label>
+                <label>E-mail<input name="email" defaultValue={resumeText('email') || data.user?.email || ''} /></label>
+                <label>通勤時間（Googleマップ確認値）<input name="commute" defaultValue={resumeText('commute')} placeholder="例: 約1時間20分" /></label>
+                <label>扶養家族数<input name="dependents" defaultValue={resumeText('dependents')} /></label>
+                <label>配偶者<input name="spouse" defaultValue={resumeText('spouse')} /></label>
+                <label>配偶者の扶養義務<input name="spouseSupport" defaultValue={resumeText('spouseSupport')} /></label>
+              </div>
+              <label className="field-block">現住所<input name="address" defaultValue={resumeText('address')} /></label>
+              <label className="field-block">現住所ふりがな<input name="addressKana" defaultValue={resumeText('addressKana')} /></label>
+              {googleMapsUrl ? (
+                <a className="secondary-action small-action map-action" href={googleMapsUrl} target="_blank" rel="noreferrer">
+                  Googleマップで職場までの経路を確認
+                </a>
+              ) : (
+                <p className="form-meta">会社住所が未取得のため、通勤時間はGoogleマップ確認後に手入力してください。</p>
+              )}
+              <label className="field-block">
+                学歴・職歴
+                <textarea name="history" rows={8} defaultValue={rowsToText(overrides.history) || rowsToText(profile.history)} />
+              </label>
+              <label className="field-block">
+                免許・資格
+                <textarea name="licenses" rows={5} defaultValue={rowsToText(overrides.licenses) || rowsToText(profile.licenses)} />
+              </label>
+              <button className="primary-action small-action" type="submit">編集内容を保存</button>
+            </form>
+          </details>
 
           {form ? (
             <div className="application-form">
