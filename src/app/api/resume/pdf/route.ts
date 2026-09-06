@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { isOwnerEmail } from '@/lib/auth';
-import { renderA4Pdf } from '@/lib/browser-pdf';
 import type { Company } from '@/lib/companies';
 import { buildJisResumeHtml } from '@/lib/jis-resume';
 import { createClient } from '@/lib/supabase/server';
@@ -41,6 +40,7 @@ export async function GET() {
     highlights: [],
     updatedAt: new Date().toISOString().slice(0, 10)
   };
+  const { renderA4Pdf } = await import('@/lib/browser-pdf');
   const pdf = await renderA4Pdf(buildJisResumeHtml(profile, genericCompany, user.email ?? ''));
 
   return new NextResponse(new Uint8Array(pdf), {
