@@ -25,16 +25,16 @@ function arrayRows(value: unknown): ResumeRow[] {
   if (!Array.isArray(value)) return [];
   const rows: ResumeRow[] = [];
   value.forEach((item) => {
-    if (!item || typeof item !== 'object') return null;
-    const row = item as Record<string, unknown>;
-    rows.push({
-      year: typeof row.year === 'string' ? row.year : '',
-      month: typeof row.month === 'string' ? row.month : '',
-      text: typeof row.text === 'string' ? row.text : '',
-      align: row.align === 'center' || row.align === 'right' ? row.align : 'left'
+      if (!item || typeof item !== 'object') return null;
+      const row = item as Record<string, unknown>;
+      rows.push({
+        year: typeof row.year === 'string' ? row.year : '',
+        month: typeof row.month === 'string' ? row.month : '',
+        text: typeof row.text === 'string' ? row.text : '',
+        align: row.align === 'center' || row.align === 'right' ? row.align : 'left'
+      });
+      return null;
     });
-    return null;
-  });
   return rows;
 }
 
@@ -85,15 +85,18 @@ function licenseRows(profile: Record<string, unknown>) {
 
 function motivation(profile: Record<string, unknown>, company: Company) {
   const research = company.fullResearch;
+  if (typeof research.resume_motivation === 'string' && research.resume_motivation.trim()) {
+    return research.resume_motivation.trim();
+  }
+
   const fitReason = typeof research.fit_reason === 'string' ? research.fit_reason : '';
+  const memo = typeof research.memo === 'string' ? research.memo : '';
   const axis = text(profile, 'career_axis', 'PdM型企画、新規事業、AIを使った業務改善・グロースに関心があります。');
-  const primary = text(profile, 'primary_experience', '');
-  const companyReason = fitReason || `${company.name}の${company.roleFit}に強く関心があります。`;
+  const companySignal = fitReason || company.headline || company.roleFit || memo;
   return [
-    companyReason,
-    axis,
-    primary ? `これまで、${primary}。` : '',
-    '現場課題を一次情報から捉え、仮説検証と改善を重ねながら、事業とユーザー双方に価値のある企画に取り組みたいです。'
+    `${company.name}について、${companySignal}という点に強く関心を持ちました。単に「企画」という職種名だけで判断するのではなく、顧客課題の発見、仮説検証、要件整理、関係者との合意形成まで担える環境かを重視しており、貴社にはその経験を伸ばせる可能性を感じています。`,
+    `2026年1月から個人事業主「closer」として、AIを駆使した情報・ツール提供事業に取り組んできました。営業支援SNSを開発して営業マン十数人に使ってもらいましたが、発信者側のメリットが薄いという壁にぶつかりました。そこで法人向けに転換し、約30社へアプローチして3社のテスト導入まで進める中で、現場課題を聞き、仮説を変え、使われる形まで落とし込む難しさを学びました。`,
+    `${axis}この経験を活かし、${company.name}でも、ユーザーや現場の一次情報から課題を捉え、施策やプロダクトの形に翻訳し、検証と改善を重ねる役割で貢献したいです。`
   ].filter(Boolean).join('\n');
 }
 
@@ -124,9 +127,10 @@ export function buildJisResumeHtml(profile: Record<string, unknown>, company: Co
   <meta charset="utf-8" />
   <title>履歴書_${escapeHtml(company.slug)}</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700&display=swap');
     @page { size: A4; margin: 0; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #fff; color: #111; font-family: "Yu Mincho", "Hiragino Mincho ProN", "MS Mincho", serif; }
+    body { margin: 0; background: #fff; color: #111; font-family: "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", "MS Mincho", serif; }
     .page { width: 210mm; height: 297mm; padding: 14mm 13mm; page-break-after: always; background: #fff; }
     .page:last-child { page-break-after: auto; }
     .head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 3mm; }
