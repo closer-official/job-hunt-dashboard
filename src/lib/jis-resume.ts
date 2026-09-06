@@ -22,6 +22,37 @@ function text(profile: Record<string, unknown>, key: string, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function resumeOverrides(company: Company) {
+  return objectValue(company.fullResearch.resume_overrides);
+}
+
+function mergedProfile(profile: Record<string, unknown>, company: Company) {
+  return { ...profile, ...resumeOverrides(company) };
+}
+
+function normalizePhoto(value: string) {
+  if (!value) return '';
+  if (value.startsWith('data:image/')) return value;
+  return `data:image/jpeg;base64,${value}`;
+}
+
+function companyCommute(company: Company) {
+  const research = company.fullResearch;
+  const overrides = resumeOverrides(company);
+  const commute = objectValue(research.commute);
+  return (
+    text(overrides, 'commute') ||
+    text(commute, 'duration_text') ||
+    text(research, 'commute_time') ||
+    text(research, 'commuteText') ||
+    'Googleマップで要確認'
+  );
+}
+
 function arrayRows(value: unknown): ResumeRow[] {
   if (!Array.isArray(value)) return [];
   const rows: ResumeRow[] = [];
@@ -100,11 +131,7 @@ function motivation(profile: Record<string, unknown>, company: Company) {
 }
 
 function desiredText(company: Company) {
-  return [
-    '貴社規定に従います。',
-    `希望職種: PdM、プロダクト企画、新規事業開発、事業企画に近い役割を希望します。`,
-    `応募先: ${company.name}`
-  ].join('\n');
+  return '貴社規定に従います。';
 }
 
 function rowsHtml(rows: ResumeRow[]) {
@@ -115,10 +142,11 @@ function rowsHtml(rows: ResumeRow[]) {
 
 export function buildJisResumeHtml(profile: Record<string, unknown>, company: Company, userEmail: string) {
   const today = new Date();
-  const birth = dateParts(text(profile, 'birthDate'));
-  const photo = text(profile, 'photoDataUrl');
-  const email = userEmail || text(profile, 'email');
-  const name = text(profile, 'name');
+  const resumeProfile = mergedProfile(profile, company);
+  const birth = dateParts(text(resumeProfile, 'birthDate'));
+  const photo = normalizePhoto(text(resumeProfile, 'photoDataUrl') || text(resumeProfile, 'photo'));
+  const email = userEmail || text(resumeProfile, 'email');
+  const name = text(resumeProfile, 'name');
 
   return `<!doctype html>
 <html lang="ja">
@@ -164,33 +192,33 @@ export function buildJisResumeHtml(profile: Record<string, unknown>, company: Co
     <table>
       <tr>
         <td class="label">ふりがな</td>
-        <td>${escapeHtml(text(profile, 'nameKana'))}</td>
+        <td>${escapeHtml(text(resumeProfile, 'nameKana'))}</td>
         <td class="photoCell" rowspan="4"><div class="photo">${photo ? `<img src="${escapeHtml(photo)}" alt="証明写真" />` : '写真貼付位置<br>横30mm 縦40mm'}</div></td>
       </tr>
       <tr><td class="label">氏 名</td><td class="name">${escapeHtml(name)}</td></tr>
-      <tr><td class="label">生年月日</td><td>${escapeHtml(birth.year)}年 ${escapeHtml(birth.month)}月 ${escapeHtml(birth.day)}日生（満 ${escapeHtml(ageFromBirthDate(text(profile, 'birthDate')))} 歳）</td></tr>
-      <tr><td class="label">性 別</td><td>${escapeHtml(text(profile, 'gender'))}</td></tr>
+      <tr><td class="label">生年月日</td><td>${escapeHtml(birth.year)}年 ${escapeHtml(birth.month)}月 ${escapeHtml(birth.day)}日生（満 ${escapeHtml(ageFromBirthDate(text(resumeProfile, 'birthDate')))} 歳）</td></tr>
+      <tr><td class="label">性 別</td><td>${escapeHtml(text(resumeProfile, 'gender'))}</td></tr>
     </table>
     <table style="margin-top: 3mm;">
-      <tr><td class="label">ふりがな</td><td colspan="2">${escapeHtml(text(profile, 'addressKana'))}</td></tr>
-      <tr><td class="label">現住所</td><td colspan="2">〒 ${escapeHtml(text(profile, 'postalCode'))}<br>${escapeHtml(text(profile, 'address'))}</td></tr>
-      <tr><td class="label">電話番号</td><td>${escapeHtml(text(profile, 'phone'))}</td><td>E-mail: ${escapeHtml(email)}</td></tr>
+      <tr><td class="label">ふりがな</td><td colspan="2">${escapeHtml(text(resumeProfile, 'addressKana'))}</td></tr>
+      <tr><td class="label">現住所</td><td colspan="2">〒 ${escapeHtml(text(resumeProfile, 'postalCode'))}<br>${escapeHtml(text(resumeProfile, 'address'))}</td></tr>
+      <tr><td class="label">電話番号</td><td>${escapeHtml(text(resumeProfile, 'phone'))}</td><td>E-mail: ${escapeHtml(email)}</td></tr>
     </table>
     <div class="sectionTitle">学歴・職歴</div>
     <table class="history">
       <thead><tr><th class="year">年</th><th class="month">月</th><th>学歴・職歴（項目ごとにまとめて記入）</th></tr></thead>
-      <tbody>${rowsHtml(historyRows(profile))}</tbody>
+      <tbody>${rowsHtml(historyRows(resumeProfile))}</tbody>
     </table>
   </section>
   <section class="page">
     <div class="sectionTitle">免許・資格</div>
     <table class="license">
       <thead><tr><th class="year">年</th><th class="month">月</th><th>免 許 ・ 資 格</th></tr></thead>
-      <tbody>${rowsHtml(licenseRows(profile))}</tbody>
+      <tbody>${rowsHtml(licenseRows(resumeProfile))}</tbody>
     </table>
     <table class="largeBox" style="margin-top: 5mm;">
       <tr><th>志望の動機、特技、アピールポイント等</th></tr>
-      <tr><td>${escapeHtml(motivation(profile, company))}</td></tr>
+      <tr><td>${escapeHtml(motivation(resumeProfile, company))}</td></tr>
     </table>
     <table class="requestBox" style="margin-top: 4mm;">
       <tr><th>本人希望記入欄（特に給料・職種・勤務時間・勤務地等に対して希望があれば記入）</th></tr>
@@ -198,12 +226,12 @@ export function buildJisResumeHtml(profile: Record<string, unknown>, company: Co
     </table>
     <table class="compact" style="margin-top: 4mm;">
       <tr>
-        <th>通勤時間</th><td>${escapeHtml(text(profile, 'commute'))}</td>
-        <th>扶養家族数（配偶者を除く）</th><td>${escapeHtml(text(profile, 'dependents'))}</td>
+        <th>通勤時間</th><td>${escapeHtml(companyCommute(company))}</td>
+        <th>扶養家族数（配偶者を除く）</th><td>${escapeHtml(text(resumeProfile, 'dependents'))}</td>
       </tr>
       <tr>
-        <th>配偶者</th><td>${escapeHtml(text(profile, 'spouse'))}</td>
-        <th>配偶者の扶養義務</th><td>${escapeHtml(text(profile, 'spouseSupport'))}</td>
+        <th>配偶者</th><td>${escapeHtml(text(resumeProfile, 'spouse'))}</td>
+        <th>配偶者の扶養義務</th><td>${escapeHtml(text(resumeProfile, 'spouseSupport'))}</td>
       </tr>
     </table>
     <p class="note">未登録の個人情報欄は空欄です。提出前に生年月日、住所、電話番号、写真、資格情報を本人確認してください。</p>
