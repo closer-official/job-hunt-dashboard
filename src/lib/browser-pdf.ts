@@ -3,6 +3,7 @@ import { chromium as playwright } from 'playwright-core';
 
 export async function renderA4Pdf(html: string) {
   const executablePath = await chromium.executablePath();
+  console.log('[resume-pdf] launching chromium', { hasExecutablePath: Boolean(executablePath) });
   const browser = await playwright.launch({
     args: chromium.args,
     executablePath,
@@ -11,7 +12,7 @@ export async function renderA4Pdf(html: string) {
 
   try {
     const page = await browser.newPage({ viewport: { width: 794, height: 1123 }, deviceScaleFactor: 1 });
-    await page.setContent(html, { waitUntil: 'networkidle' });
+    await page.setContent(html, { waitUntil: 'load' });
     return await page.pdf({
       format: 'A4',
       printBackground: true,
