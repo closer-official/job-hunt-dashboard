@@ -1,7 +1,9 @@
 import { notFound } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { DashboardShell } from '@/components/dashboard-shell';
 import { isOwnerEmail } from '@/lib/auth';
 import { getCompany, statusLabels } from '@/lib/companies';
+import { motivationPipeline, pipelineStatus, researchFieldLabels } from '@/lib/motivation-pipeline';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -50,6 +52,51 @@ function applicationForm(value: unknown): ApplicationForm | null {
   };
 }
 
+async function approveMotivation(formData: FormData) {
+  'use server';
+
+  const slug = String(formData.get('slug') ?? '');
+  if (!slug) return;
+
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  if (!isOwnerEmail(data.user?.email)) return;
+
+  const company = await getCompany(slug);
+  if (!company) return;
+
+  const pipeline = motivationPipeline(company.fullResearch.motivation_pipeline);
+  const status = pipelineStatus(pipeline);
+  if (!status.canApprove || !pipeline.draft?.trim()) return;
+
+  const nextResearch = {
+    ...company.fullResearch,
+    motivation_pipeline: {
+      ...pipeline,
+      review_status: 'approved',
+      confirmed_at: new Date().toISOString(),
+      confirmed_by: data.user?.email ?? ''
+    }
+  };
+
+  await supabase
+    .from('companies')
+    .update({ full_research: nextResearch, updated_at: new Date().toISOString() })
+    .eq('slug', slug);
+
+  await supabase
+    .from('company_updates')
+    .insert({
+      company_id: company.id,
+      summary: '志望動機生成パイプラインの本人確認が完了し、会社別履歴書PDFへの反映を許可しました。',
+      previous_score: company.score,
+      new_score: company.score,
+      source_note: '志望動機生成ゲート'
+    });
+
+  revalidatePath(`/companies/${slug}`);
+}
+
 export default async function CompanyDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const company = await getCompany(decodeURIComponent(id));
@@ -67,6 +114,9 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
   const memo = textValue(research.memo);
   const form = applicationForm(research.application_form);
   const showApplicationPrep = canSeePersonal && isBOrAbove(company.grade);
+  const motivation = motivationPipeline(research.motivation_pipeline);
+  const motivationStatus = pipelineStatus(motivation);
+  const researchEntries = Object.entries(researchFieldLabels) as [keyof typeof researchFieldLabels, string][];
 
   return (
     <DashboardShell>
@@ -135,6 +185,44 @@ export default async function CompanyDetailPage({ params }: { params: Promise<{ 
             <a className="primary-action small-action" href={`/api/companies/${company.slug}/resume/pdf`} target="_blank" rel="noreferrer">
               会社別履歴書PDF
             </a>
+          </div>
+
+          <div className="pipeline-box">
+            <div className="pipeline-head">
+              <div>
+                <h3>志望動機生成ゲート</h3>
+                <p className="form-meta">{motivationStatus.description}</p>
+              </div>
+              <span className={`pipeline-badge ${motivationStatus.canUseDraft ? 'ok' : motivationStatus.canApprove ? 'wait' : 'stop'}`}>
+                {motivationStatus.label}
+              </span>
+            </div>
+            <dl className="answer-list">
+              {researchEntries.map(([field, label]) => {
+                const value = motivation.research?.[field];
+                const isMissing = typeof value !== 'string' || !value.trim();
+                return (
+                  <div className="answer-item" key={field}>
+                    <dt>{label}</dt>
+                    <dd className={isMissing ? 'missing-field' : ''}>
+                      {isMissing ? '未取得' : field === 'source_url' ? <a href={value} target="_blank" rel="noreferrer">{value}</a> : value}
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+            {motivation.draft ? (
+              <div className="draft-box">
+                <h4>志望動機ドラフト</h4>
+                <p>{motivation.draft}</p>
+              </div>
+            ) : null}
+            {motivationStatus.canApprove ? (
+              <form action={approveMotivation}>
+                <input type="hidden" name="slug" value={company.slug} />
+                <button className="primary-action small-action" type="submit">この接続で確認済みにする</button>
+              </form>
+            ) : null}
           </div>
 
           {form ? (
