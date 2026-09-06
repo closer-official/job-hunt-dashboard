@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isOwnerEmail } from '@/lib/auth';
 import type { Company } from '@/lib/companies';
 import { buildJisResumeHtml } from '@/lib/jis-resume';
+import { contentDispositionForPdf, resumePdfFilename } from '@/lib/resume-filename';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
@@ -49,7 +50,7 @@ export async function GET() {
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         'content-type': 'application/pdf',
-        'content-disposition': 'inline; filename="resume-summary.pdf"',
+        'content-disposition': contentDispositionForPdf(resumePdfFilename(profile, genericCompany)),
         'cache-control': 'no-store'
       }
     });
