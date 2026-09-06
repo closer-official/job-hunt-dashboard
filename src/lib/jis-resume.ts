@@ -1,4 +1,5 @@
 import type { Company } from '@/lib/companies';
+import { approvedResumeMotivation, motivationPipeline, pipelineStatus } from '@/lib/motivation-pipeline';
 
 type ResumeRow = {
   year: string;
@@ -85,19 +86,17 @@ function licenseRows(profile: Record<string, unknown>) {
 
 function motivation(profile: Record<string, unknown>, company: Company) {
   const research = company.fullResearch;
-  if (typeof research.resume_motivation === 'string' && research.resume_motivation.trim()) {
-    return research.resume_motivation.trim();
+  const approved = approvedResumeMotivation(research);
+  if (approved) {
+    return approved;
   }
 
-  const fitReason = typeof research.fit_reason === 'string' ? research.fit_reason : '';
-  const memo = typeof research.memo === 'string' ? research.memo : '';
-  const axis = text(profile, 'career_axis', 'PdM型企画、新規事業、AIを使った業務改善・グロースに関心があります。');
-  const companySignal = fitReason || company.headline || company.roleFit || memo;
+  const status = pipelineStatus(motivationPipeline(research.motivation_pipeline));
   return [
-    `${company.name}について、${companySignal}という点に強く関心を持ちました。単に「企画」という職種名だけで判断するのではなく、顧客課題の発見、仮説検証、要件整理、関係者との合意形成まで担える環境かを重視しており、貴社にはその経験を伸ばせる可能性を感じています。`,
-    `2026年1月から個人事業主「closer」として、AIを駆使した情報・ツール提供事業に取り組んできました。営業支援SNSを開発して営業マン十数人に使ってもらいましたが、発信者側のメリットが薄いという壁にぶつかりました。そこで法人向けに転換し、約30社へアプローチして3社のテスト導入まで進める中で、現場課題を聞き、仮説を変え、使われる形まで落とし込む難しさを学びました。`,
-    `${axis}この経験を活かし、${company.name}でも、ユーザーや現場の一次情報から課題を捉え、施策やプロダクトの形に翻訳し、検証と改善を重ねる役割で貢献したいです。`
-  ].filter(Boolean).join('\n');
+    '志望動機は本人確認待ちです。',
+    `現在の状態: ${status.label}`,
+    '提出前に企業詳細ページの「志望動機生成ゲート」で、一次情報と本人経歴の接続を確認してください。'
+  ].join('\n');
 }
 
 function desiredText(company: Company) {
