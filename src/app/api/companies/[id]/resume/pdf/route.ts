@@ -38,8 +38,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     .maybeSingle();
 
   const profile = (profileRow?.profile ?? {}) as Record<string, unknown>;
+  const html = buildJisResumeHtml(profile, company, user.email ?? '');
   try {
-    const html = buildJisResumeHtml(profile, company, user.email ?? '');
     const { renderA4Pdf } = await import('@/lib/browser-pdf');
     const pdf = await renderA4Pdf(html);
 
@@ -55,6 +55,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       slug: company.slug,
       error: error instanceof Error ? error.message : String(error)
     });
-    return NextResponse.json({ error: 'Resume PDF generation failed.' }, { status: 500 });
+    return new NextResponse(html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store'
+      }
+    });
   }
 }
