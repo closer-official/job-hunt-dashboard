@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { isOwnerEmail } from '@/lib/auth';
-import { renderA4Pdf } from '@/lib/browser-pdf';
 import { getCompany } from '@/lib/companies';
 import { buildJisResumeHtml } from '@/lib/jis-resume';
 import { createClient } from '@/lib/supabase/server';
@@ -39,6 +38,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const profile = (profileRow?.profile ?? {}) as Record<string, unknown>;
   const html = buildJisResumeHtml(profile, company, user.email ?? '');
+  const { renderA4Pdf } = await import('@/lib/browser-pdf');
   const pdf = await renderA4Pdf(html);
 
   return new NextResponse(new Uint8Array(pdf), {
