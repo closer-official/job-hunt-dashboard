@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
+export const maxDuration = 60;
 
 export async function GET() {
   if (!process.env.DASHBOARD_OWNER_EMAIL) {
@@ -40,14 +41,21 @@ export async function GET() {
     highlights: [],
     updatedAt: new Date().toISOString().slice(0, 10)
   };
-  const { renderA4Pdf } = await import('@/lib/browser-pdf');
-  const pdf = await renderA4Pdf(buildJisResumeHtml(profile, genericCompany, user.email ?? ''));
+  try {
+    const { renderA4Pdf } = await import('@/lib/browser-pdf');
+    const pdf = await renderA4Pdf(buildJisResumeHtml(profile, genericCompany, user.email ?? ''));
 
-  return new NextResponse(new Uint8Array(pdf), {
-    headers: {
-      'content-type': 'application/pdf',
-      'content-disposition': 'inline; filename="resume-summary.pdf"',
-      'cache-control': 'no-store'
-    }
-  });
+    return new NextResponse(new Uint8Array(pdf), {
+      headers: {
+        'content-type': 'application/pdf',
+        'content-disposition': 'inline; filename="resume-summary.pdf"',
+        'cache-control': 'no-store'
+      }
+    });
+  } catch (error) {
+    console.error('[resume-pdf] generic pdf generation failed', {
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return NextResponse.json({ error: 'Resume PDF generation failed.' }, { status: 500 });
+  }
 }
