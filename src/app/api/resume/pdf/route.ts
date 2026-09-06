@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server';
 import { isOwnerEmail } from '@/lib/auth';
-import { getCompanies } from '@/lib/companies';
-import { createTextPdf } from '@/lib/pdf';
+import { renderA4Pdf } from '@/lib/browser-pdf';
+import type { Company } from '@/lib/companies';
+import { buildJisResumeHtml } from '@/lib/jis-resume';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function profileText(profile: Record<string, unknown>, key: string, fallback = '未設定') {
-  return typeof profile[key] === 'string' ? profile[key] : fallback;
-}
-
-function profileArray(profile: Record<string, unknown>, key: string) {
-  const value = profile[key];
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
-}
 
 export async function GET() {
   if (!process.env.DASHBOARD_OWNER_EMAIL) {
@@ -35,37 +27,22 @@ export async function GET() {
     .maybeSingle();
 
   const profile = (profileRow?.profile ?? {}) as Record<string, unknown>;
-  const rules = profileArray(profile, 'rules');
-  const companies = await getCompanies();
-  const topCompanies = companies
-    .filter((company) => company.status !== 'rejected')
-    .slice(0, 5)
-    .map((company) => `${company.name}: ${company.grade} / ${company.score} - ${company.roleFit}`);
+  const genericCompany: Company = {
+    id: 'resume',
+    name: '応募先企業',
+    slug: 'general',
+    score: 0,
+    grade: '共通',
+    status: 'watching',
+    roleFit: 'PdM、プロダクト企画、新規事業開発、事業企画',
+    headline: '提出先に合わせて志望動機を調整してください。',
+    fullResearch: {},
+    risks: [],
+    highlights: [],
+    updatedAt: new Date().toISOString().slice(0, 10)
+  };
+  const pdf = await renderA4Pdf(buildJisResumeHtml(profile, genericCompany, user.email ?? ''));
 
-  const lines = [
-    '履歴書・応募用プロフィール要約',
-    `作成対象: ${profileText(profile, 'name', '本人')}`,
-    `メール: ${user.email ?? ''}`,
-    `ポートフォリオ: ${profileText(profile, 'portfolio_url')}`,
-    `所属: ${profileText(profile, 'school')}`,
-    '',
-    '志望軸',
-    profileText(profile, 'career_axis', 'PdM型企画、Product Builder、新規事業、AIを使った業務改善・グロース。'),
-    '',
-    '主な経験',
-    profileText(profile, 'primary_experience'),
-    profileText(profile, 'secondary_experience'),
-    profileText(profile, 'ai_experience'),
-    profileText(profile, 'customer_experience'),
-    '',
-    '応募優先企業',
-    ...topCompanies,
-    '',
-    '運用メモ',
-    ...(rules.length > 0 ? rules : ['企業別の志望動機と提出用PDFは、各社詳細の判定に合わせて更新する。'])
-  ];
-
-  const pdf = createTextPdf(lines);
   return new NextResponse(new Uint8Array(pdf), {
     headers: {
       'content-type': 'application/pdf',
