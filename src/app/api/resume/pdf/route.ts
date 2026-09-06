@@ -41,9 +41,10 @@ export async function GET() {
     highlights: [],
     updatedAt: new Date().toISOString().slice(0, 10)
   };
+  const html = buildJisResumeHtml(profile, genericCompany, user.email ?? '');
   try {
     const { renderA4Pdf } = await import('@/lib/browser-pdf');
-    const pdf = await renderA4Pdf(buildJisResumeHtml(profile, genericCompany, user.email ?? ''));
+    const pdf = await renderA4Pdf(html);
 
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
@@ -56,6 +57,11 @@ export async function GET() {
     console.error('[resume-pdf] generic pdf generation failed', {
       error: error instanceof Error ? error.message : String(error)
     });
-    return NextResponse.json({ error: 'Resume PDF generation failed.' }, { status: 500 });
+    return new NextResponse(html, {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'no-store'
+      }
+    });
   }
 }
