@@ -79,6 +79,24 @@ button, input { font: inherit; }
 .missing-field { color: var(--danger); font-weight: 700; }
 .draft-box { border-top: 1px solid var(--line); padding-top: 12px; }
 .draft-box h4 { margin: 0 0 8px; font-size: 14px; }
+.action-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.stack-form { display: grid; gap: 10px; }
+.field-block { display: grid; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.field-block input, .field-block textarea, .resume-edit-form input, .resume-edit-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: #ffffff;
+  line-height: 1.6;
+}
+.field-block textarea, .resume-edit-form textarea { resize: vertical; white-space: pre-wrap; }
+.resume-edit-box summary { cursor: pointer; font-weight: 800; }
+.resume-edit-form { display: grid; gap: 12px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.form-grid label { display: grid; gap: 8px; color: var(--muted); font-size: 13px; font-weight: 800; }
+.map-action { width: fit-content; }
 .answer-list { display: grid; gap: 10px; margin: 0; }
 .answer-item { display: grid; grid-template-columns: minmax(160px, 260px) 1fr; gap: 14px; padding: 12px 0; border-top: 1px solid var(--line); }
 .answer-item dt { color: var(--muted); font-size: 13px; font-weight: 800; line-height: 1.6; }
@@ -104,5 +122,7 @@ time { color: var(--muted); }
   .pipeline-head { flex-direction: column; }
   .prep-header { flex-direction: column; }
   .small-action { width: 100%; }
+  .form-grid { grid-template-columns: 1fr; }
+  .map-action { width: 100%; }
   .timeline-item { grid-template-columns: 1fr; }
 }
