@@ -15,6 +15,10 @@ export async function renderA4Pdf(html: string) {
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
+    await Promise.race([
+      page.evaluate(() => document.fonts.ready),
+      new Promise((resolve) => setTimeout(resolve, 8000))
+    ]);
     return await page.pdf({
       format: 'A4',
       printBackground: true,
