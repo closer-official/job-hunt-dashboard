@@ -1,17 +1,19 @@
 import chromium from '@sparticuz/chromium';
-import { chromium as playwright } from 'playwright-core';
+import puppeteer from 'puppeteer-core';
 
 export async function renderA4Pdf(html: string) {
+  chromium.setGraphicsMode = false;
   const executablePath = await chromium.executablePath();
   console.log('[resume-pdf] launching chromium', { hasExecutablePath: Boolean(executablePath) });
-  const browser = await playwright.launch({
-    args: chromium.args,
+  const browser = await puppeteer.launch({
+    args: await puppeteer.defaultArgs({ args: chromium.args, headless: 'shell' }),
+    defaultViewport: { width: 794, height: 1123, deviceScaleFactor: 1 },
     executablePath,
-    headless: true
+    headless: 'shell'
   });
 
   try {
-    const page = await browser.newPage({ viewport: { width: 794, height: 1123 }, deviceScaleFactor: 1 });
+    const page = await browser.newPage();
     await page.setContent(html, { waitUntil: 'load' });
     return await page.pdf({
       format: 'A4',
@@ -19,6 +21,6 @@ export async function renderA4Pdf(html: string) {
       margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' }
     });
   } finally {
-    await browser.close();
+    await Promise.race([browser.close(), browser.close(), browser.close()]);
   }
 }
